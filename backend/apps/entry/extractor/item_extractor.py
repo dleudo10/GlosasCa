@@ -19,7 +19,7 @@ class ItemExtractor:
     NO consulta la base de datos.
     """
     _WS_RE = re.compile(r"\s+")
-    _CAUSA_RE = re.compile(r"^\d{1,2}\s*-")
+    _CAUSA_RE = re.compile(r"^\d{1,2}(?:\s|-|$)")
 
     def __init__(self):
         self.column_mapper = ColumnMapper()
@@ -64,7 +64,7 @@ class ItemExtractor:
                 )
                 if result is None:
                     continue
-
+                
                 page_items, detected_column_map, detected_keep_indices = result
                 items.extend(page_items)
 

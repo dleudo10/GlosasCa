@@ -40,6 +40,25 @@ class HISRepository:
                 ["%s"] * len(cups_unicos)
             )
 
+            # cur.execute(
+            #     f"""
+            #     SELECT
+            #         GN_RMS.RMSCUM,
+            #         GN_RMS.RMSMSRESO
+            #     FROM MAEATE3
+            #     INNER JOIN GN_RMS
+            #         ON MAEATE3.MSRESO = GN_RMS.RMSMSRESO
+            #     WHERE MAEATE3.MPNFac = %s
+            #     AND MAEATE3.MATipDoc = %s
+            #     AND GN_RMS.RMSCUM IN ({placeholders})
+            #     """,
+            #     [
+            #         numero_factura,
+            #         str(tipo_factura),
+            #         *cups_unicos,
+            #     ],
+            # )
+            
             cur.execute(
                 f"""
                 SELECT
@@ -48,15 +67,11 @@ class HISRepository:
                 FROM MAEATE3
                 INNER JOIN GN_RMS
                     ON MAEATE3.MSRESO = GN_RMS.RMSMSRESO
-                WHERE MAEATE3.MPNFac = %s
+                WHERE CONVERT(varchar(50), MAEATE3.MPNFac) = %s
                 AND MAEATE3.MATipDoc = %s
-                AND GN_RMS.RMSCUM IN ({placeholders})
+                AND CONVERT(varchar(50), GN_RMS.RMSCUM) IN ({placeholders})
                 """,
-                [
-                    numero_factura,
-                    str(tipo_factura),
-                    *cups_unicos,
-                ],
+                [numero_factura, str(tipo_factura), *cups_unicos],
             )
 
             filas = cur.fetchall()
@@ -103,13 +118,26 @@ class HISRepository:
                     ["%s"] * len(faltantes)
                 )
 
+                # cur.execute(
+                #     f"""
+                #     SELECT
+                #         RMSCUM,
+                #         RMSMSRESO
+                #     FROM GN_RMS
+                #     WHERE RMSCUM IN ({placeholders_fb})
+                #     AND RMSMSRESO IS NOT NULL
+                #     AND RMSMSRESO <> ''
+                #     """,
+                #     faltantes,
+                # )
+                
                 cur.execute(
                     f"""
                     SELECT
                         RMSCUM,
                         RMSMSRESO
                     FROM GN_RMS
-                    WHERE RMSCUM IN ({placeholders_fb})
+                    WHERE CONVERT(varchar(50), RMSCUM) IN ({placeholders_fb})
                     AND RMSMSRESO IS NOT NULL
                     AND RMSMSRESO <> ''
                     """,

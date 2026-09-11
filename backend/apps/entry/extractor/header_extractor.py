@@ -178,6 +178,8 @@ class HeaderExtractor:
         return int(value) if value else 0
 
     def _extract_factura(self, text: str) -> dict:
+        print("extractor de factura")
+        print(text)
 
         result = {
             "factura_raw": "",
@@ -189,7 +191,9 @@ class HeaderExtractor:
             r"Factura"
             r"\s+"
             r"((?:SS|SN)"
-            r"\s*-\s*"
+            r"\s*"
+            r"-?"
+            r"\s*"
             r"\d+)"
         )
 

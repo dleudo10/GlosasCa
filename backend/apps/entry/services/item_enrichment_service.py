@@ -31,9 +31,20 @@ class ItemEnrichmentService:
         # 4. Resolver todo en memoria contra el diccionario ya traído.
         return [self._resolver_item(item, mapa_codigos) for item in clasificados]
 
+    # def _requiere_bd(self, item: dict) -> bool:
+    #     cups_norm = self._normalizar_may869(item.get("codigo_cups_pdf", ""))
+    #     num_causa = self._num_causa(item.get("causa_especifica", ""))
+    #     return cups_norm == "MAY869500" or num_causa in self.CAUSAS_BUSCAR_BD
+    
+    _CODIGO_VALIDO_BD_RE = re.compile(r"^\d+$")  # ajusta según el formato real de tus CUPS/CUM
+
     def _requiere_bd(self, item: dict) -> bool:
         cups_norm = self._normalizar_may869(item.get("codigo_cups_pdf", ""))
         num_causa = self._num_causa(item.get("causa_especifica", ""))
+        
+        if cups_norm != "MAY869500" and not self._CODIGO_VALIDO_BD_RE.match(cups_norm):
+            return False  # código no numérico -> no consultar BD, se resuelve como caso 3
+        
         return cups_norm == "MAY869500" or num_causa in self.CAUSAS_BUSCAR_BD
 
     def _resolver_item(self, item: dict, mapa_codigos: dict[str, str]) -> dict:

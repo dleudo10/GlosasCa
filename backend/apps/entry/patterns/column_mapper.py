@@ -1,11 +1,13 @@
 from ..services.normalizer import TextNormalizer
 
 class ColumnMapper:
+    
+    MIN_LEN_PARA_PREFIJO = 5
 
     ALIASES = {
         "codigo_cups_pdf": [
             "CODIGO CUPS", "CODIGO CUPS/CUM", "CUPS", "CUM",
-            "CUPS/CUM", "CODIGO CUPS CUM", "CODIGO",
+            "CUPS/CUM", "CODIGO CUPS CUM", "CODIGO", "CUPS/C", "CODIGOCUPS/C", "CODIGO CUPS/C"
         ],
         "codigo_item": [
             "CODIGO ITEM", "CODIGO DEL ITEM", "CODIGO ITEM XLS",
@@ -39,7 +41,7 @@ class ColumnMapper:
         '\n' -> ' ' insertado por normalize_for_search no rompa el match
         (ej: 'CODIGO CUPS/ CUM' vs 'CODIGO CUPS/CUM')."""
         return TextNormalizer.normalize_for_search(text or "").replace(" ", "")
-
+    
     def map(self, headers: list) -> dict:
         keys = [self._key(h) for h in headers]
         column_map = {}
@@ -47,11 +49,30 @@ class ColumnMapper:
         for field, aliases in self.ALIASES.items():
             alias_keys = {self._key(a) for a in aliases}
             for index, key in enumerate(keys):
-                if key and key in alias_keys and index not in column_map.values():
+                if not key or index in column_map.values():
+                    continue
+                if self._coincide(key, alias_keys):
                     column_map[field] = index
                     break
 
         return column_map
+
+    def _coincide(self, key: str, alias_keys: set[str]) -> bool:
+        if key in alias_keys:
+            return True
+
+        # Tolerar encabezados truncados por columnas angostas del PDF
+        # (ej. 'CODIGOCUPS/C' en vez de 'CODIGOCUPS/CUM'). Solo se acepta
+        # como prefijo si ambos lados tienen longitud razonable, para no
+        # hacer match accidental entre headers cortos y no relacionados.
+        if len(key) < self.MIN_LEN_PARA_PREFIJO:
+            return False
+        for alias_key in alias_keys:
+            if len(alias_key) < self.MIN_LEN_PARA_PREFIJO:
+                continue
+            if key.startswith(alias_key) or alias_key.startswith(key):
+                return True
+        return False
 
     def has_item_columns(self, column_map: dict) -> bool:
         important_fields = {"codigo_cups_pdf", "descripcion", "valor_glosa"}

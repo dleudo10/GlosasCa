@@ -31,8 +31,9 @@ class GlosaService:
     def process(self, file) -> dict:
         document = self.pdf_reader.read(file)
         encabezado = self.header_extractor.extract(document)
+        print(encabezado)
         items = self.item_extractor.extract(document)
-
+        
         items = self.enrichment_service.enrich_all(
             items=items,
             numero_factura=encabezado.get("numero_factura", ""),

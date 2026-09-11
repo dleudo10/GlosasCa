@@ -9,6 +9,7 @@ export const uploadPDFs = async (files: File[]) => {
     });
 
     const {data} = await api.post("glosas/upload/", formData);
+    console.log(data)
     return data;
 };
 
