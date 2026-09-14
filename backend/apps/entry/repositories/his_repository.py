@@ -213,11 +213,30 @@ class HISRepository:
                   AND MAEATE2.MPNFac    = %s
                   AND (MAEATE2.MaEsAnuP <> 'S' OR MAEATE2.MaEsAnuP IS NULL)
                   AND MAEATE2.FcPTpoTrn = 'F'
-                ORDER BY TIPPROC.TiPrDes, MAEATE2.PRCODI
+                UNION ALL
+                SELECT
+                    MAEATE3.MSRESO AS PRCODI,
+                    ISNULL(MAEATE3.MaNomg, MAEATE3.MSRESO) AS PrNomb,
+                    'SUMINISTRO' AS TiPrDes,
+                    MAEATE3.MAVaTS AS MAVaTP,
+                    NULL AS MAHONCOD,
+                    NULL AS MATipP
+                FROM MAEATE3
+                WHERE MAEATE3.MATipDoc = %s
+                    AND MAEATE3.MPNFac = %s
+                    AND (MAEATE3.MaEsAnuS <> 'S' OR MAEATE3.MaEsAnuS IS NULL)
+                    AND MAEATE3.FcSTpoTrn = 'F'
+                ORDER BY TiPrDes, PRCODI
                 """,
-                [str(tipo_factura), str(numero_factura)],
+                [
+                    str(tipo_factura),
+                    str(numero_factura),
+                    str(tipo_factura),
+                    str(numero_factura)
+                ],
             )
             rows = cur.fetchall()
+        print(rows)
 
         resultado = []
         for idx, row in enumerate(rows):

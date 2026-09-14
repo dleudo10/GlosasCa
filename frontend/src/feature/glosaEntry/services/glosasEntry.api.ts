@@ -13,7 +13,7 @@ export const uploadPDFs = async (files: File[]) => {
     return data;
 };
 
-export const getItemsBD = async (
+export const getItemsBD = async ( 
     numeroFactura: string,
     tipoFactura: string,
     codigosExcluir: string[]
@@ -22,7 +22,8 @@ export const getItemsBD = async (
         `glosas/factura/${numeroFactura}/items/?tipo=${tipoFactura}`,
         { codigos_excluir: codigosExcluir }
     );
-    console.log("data items bd", data);
+    console.log("data items bd");
+    console.log(data)
     return data;
 };
 

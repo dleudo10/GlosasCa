@@ -11,6 +11,8 @@ export const useItemsFactura = () => {
             numeroFactura: string;
             tipoFactura: string;
             codigosExcluir: string[];
-        }) => getItemsBD(numeroFactura, tipoFactura, codigosExcluir),
+        }) => {
+            return getItemsBD(numeroFactura, tipoFactura, codigosExcluir)
+        },
     });
 };
