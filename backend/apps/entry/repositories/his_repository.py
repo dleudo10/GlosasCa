@@ -249,8 +249,8 @@ class HISRepository:
 
             if not prcodi or mavato <= 0:
                 continue
-            # if prcodi.upper() in codigos_excluir:
-            #     continue
+            if prcodi.upper() in codigos_excluir:
+                continue
 
             resultado.append({
                 "_rownum":          idx,
