@@ -33,40 +33,76 @@ export const getPuntosRuta = async (): Promise<PuntoRuta[]> => {
     return data.puntos;
 };
 
-export const exportarGlosas = async ( 
-    payload: ExportGlosasPayload 
-) => { 
+// export const exportarGlosas = async ( 
+//     payload: ExportGlosasPayload 
+// ) => { 
+//     console.log("payload exportarGlosas", payload);
+//     const response = await api.post( 
+//         "glosas/exportar/", 
+//         payload, 
+//         { 
+//             responseType: "blob", 
+//         } 
+//     ); 
+    
+//     const blob = new Blob( 
+//         [response.data], 
+//         { 
+//             type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
+//         } 
+//     ); 
+    
+//     const url = 
+//         window.URL.createObjectURL(blob); 
+        
+//     const link = 
+//         document.createElement("a"); 
+        
+//     link.href = url; 
+//     link.download = 
+//         `glosas_${new Date().getTime()}.xlsx`; 
+        
+//     document.body.appendChild(link); 
+//     link.click(); 
+//     link.remove(); 
+    
+//     window.URL.revokeObjectURL(url); 
+    
+//     return response; 
+// };
+export const exportarGlosas = async (
+    payload: ExportGlosasPayload
+) => {
     console.log("payload exportarGlosas", payload);
-    const response = await api.post( 
-        "glosas/exportar/", 
-        payload, 
-        { 
-            responseType: "blob", 
-        } 
-    ); 
-    
-    const blob = new Blob( 
-        [response.data], 
-        { 
-            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
-        } 
-    ); 
-    
-    const url = 
-        window.URL.createObjectURL(blob); 
-        
-    const link = 
-        document.createElement("a"); 
-        
-    link.href = url; 
-    link.download = 
-        `glosas_${new Date().getTime()}.xlsx`; 
-        
-    document.body.appendChild(link); 
-    link.click(); 
-    link.remove(); 
-    
-    window.URL.revokeObjectURL(url); 
-    
-    return response; 
+
+    const response = await api.post(
+        "glosas/exportar/",
+        payload,
+        {
+            responseType: "blob",
+        }
+    );
+
+    const blob = new Blob(
+        [response.data],
+        {
+            type: "application/vnd.ms-excel",
+        }
+    );
+
+    const url = window.URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+
+    link.href = url;
+
+    link.download = `glosas_${new Date().getTime()}.xls`;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    window.URL.revokeObjectURL(url);
+
+    return response;
 };

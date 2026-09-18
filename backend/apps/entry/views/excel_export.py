@@ -22,19 +22,32 @@ class ExportarGlosasView(APIView):
 
         return self._crear_respuesta_excel(archivo)
 
+    # @staticmethod
+    # def _crear_respuesta_excel(archivo):
+    #     response = HttpResponse(
+    #         archivo,
+    #         content_type=(
+    #             "application/vnd.openxmlformats-officedocument."
+    #             "spreadsheetml.sheet"
+    #         ),
+    #     )
+
+    #     response["Content-Disposition"] = (
+    #         'attachment; filename="glosas_exportadas.xlsx"'
+    #     )
+
+    #     return response
+    
     @staticmethod
     def _crear_respuesta_excel(archivo):
         response = HttpResponse(
             archivo,
-            content_type=(
-                "application/vnd.openxmlformats-officedocument."
-                "spreadsheetml.sheet"
-            ),
+            content_type="application/vnd.ms-excel",
         )
 
         response["Content-Disposition"] = (
-            'attachment; filename="glosas_exportadas.xlsx"'
+            'attachment; filename="glosas_exportadas.xls"'
         )
-
+        
         return response
 
