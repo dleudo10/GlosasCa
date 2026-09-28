@@ -31,11 +31,6 @@ class HISRepository:
         resultado: dict[str, str] = {}
 
         with connections[self.ALIAS].cursor() as cur:
-
-            # ============================================================
-            # PASO 1 — MISMA CONSULTA PRINCIPAL DEL MÉTODO ORIGINAL
-            # ============================================================
-
             placeholders = ", ".join(
                 ["%s"] * len(cups_unicos)
             )
@@ -205,7 +200,8 @@ class HISRepository:
                     ISNULL(TIPPROC.TiPrDes, 'Sin categoría') AS TiPrDes,
                     MAEATE2.MAVaTP,
                     MAEATE2.MAHONCOD,
-                    MAEATE2.MATipP
+                    MAEATE2.MATipP,
+                    'P' AS TIPO_ITEM
                 FROM MAEATE2
                 LEFT JOIN MAEPRO  ON MAEPRO.PRCODI   = MAEATE2.PRCODI
                 LEFT JOIN TIPPROC ON TIPPROC.TiPrCod = MAEPRO.TpPrCd
@@ -220,7 +216,8 @@ class HISRepository:
                     'SUMINISTRO' AS TiPrDes,
                     MAEATE3.MAVaTS AS MAVaTP,
                     NULL AS MAHONCOD,
-                    NULL AS MATipP
+                    NULL AS MATipP,
+                    'S' AS TIPO_ITEM
                 FROM MAEATE3
                 WHERE MAEATE3.MATipDoc = %s
                     AND MAEATE3.MPNFac = %s
@@ -240,12 +237,13 @@ class HISRepository:
 
         resultado = []
         for idx, row in enumerate(rows):
-            prcodi   = str(row[0] or "").strip()
-            prnomb   = str(row[1] or prcodi).strip()
-            tiprdes  = str(row[2] or "Sin categoría").strip()
-            mavato   = int(row[3]) if row[3] is not None else 0
+            prcodi = str(row[0] or "").strip()
+            prnomb = str(row[1] or prcodi).strip()
+            tiprdes = str(row[2] or "Sin categoría").strip()
+            mavato = int(row[3]) if row[3] is not None else 0
             mahoncod = str(row[4] or "").strip()
-            matipp   = str(row[5] or "").strip()
+            matipp = str(row[5] or "").strip()
+            tipo_item = str(row[6] or "").strip()
 
             if not prcodi or mavato <= 0:
                 continue
@@ -260,7 +258,7 @@ class HISRepository:
                 "descripcion":      prnomb,
                 "valor":            mavato,
                 "fuente":           f"MAEATE2-MATipP{matipp}",
-                "tipo_item":        "P",
+                "tipo_item":        tipo_item,
             })
 
         return resultado

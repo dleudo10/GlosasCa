@@ -389,6 +389,7 @@ const ReviewItems = () => {
                     valor_original: Number(item.valor) || 0, 
                     valor_editado: item.valor_editado, 
                     fuente: item.fuente ?? null, 
+                    tipo_item: item.tipo_item ?? null,
                 })); 
                 
                 return { 

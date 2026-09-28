@@ -438,7 +438,7 @@ class ExcelExportService:
             "NUMERO_FACTURA": self._numero_entero(numero_factura),
             "TIPO_FACTURA": self._numero_entero(tipo_factura),
             "CODIGO_GLOSA": codigo_glosa,
-            "TIPO_ITEM": "P",
+            "TIPO_ITEM": his.get("tipo_item") or "",
             "CODIGO_ITEM": codigo_item,
             "CODIGO_HONORARIO": codigo_honorario,
             "OBSERVACION_RECEPCION_GLOSA": observacion[:255],

@@ -157,6 +157,7 @@ export interface SeleccionHISExport {
     valor_original: number; 
     valor_editado?: number; 
     fuente?: string | null; 
+    tipo_item?: string | null;
 } 
 
 export interface GlobalExport { 
