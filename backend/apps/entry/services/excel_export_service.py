@@ -6,6 +6,7 @@ from datetime import datetime
 from collections import OrderedDict
 from pathlib import Path
 from typing import Any
+from apps.entry.repositories.his_repository import HISRepository
 
 import xlrd
 import xlwt
@@ -90,6 +91,8 @@ class ExcelExportService:
             detalles_xls.extend(
                 self._crear_detalles(factura)
             )
+            
+        detalles_xls = self._resolver_tipo_item_his(detalles_xls)
 
         facturas_xls = self._normalizar_facturas(facturas_xls)
         detalles_xls = self._normalizar_detalles(detalles_xls)
@@ -310,7 +313,7 @@ class ExcelExportService:
             "NUMERO_FACTURA": self._numero_entero(numero_factura),
             "TIPO_FACTURA": self._numero_entero(tipo_factura),
             "CODIGO_GLOSA": item.get("codigo_glosa", ""),
-            "TIPO_ITEM": item.get("tipo_item", ""),
+            "TIPO_ITEM": "",
             "CODIGO_ITEM": item.get("codigo_item", ""),
             "CODIGO_HONORARIO": item.get("codigo_honorario", ""),
             "OBSERVACION_RECEPCION_GLOSA": (
@@ -438,7 +441,7 @@ class ExcelExportService:
             "NUMERO_FACTURA": self._numero_entero(numero_factura),
             "TIPO_FACTURA": self._numero_entero(tipo_factura),
             "CODIGO_GLOSA": codigo_glosa,
-            "TIPO_ITEM": his.get("tipo_item") or "",
+            "TIPO_ITEM": "",
             "CODIGO_ITEM": codigo_item,
             "CODIGO_HONORARIO": codigo_honorario,
             "OBSERVACION_RECEPCION_GLOSA": observacion[:255],
@@ -1051,3 +1054,87 @@ class ExcelExportService:
             ValueError,
         ):
             return 0
+        
+    def _resolver_tipo_item_his(
+        self,
+        detalles: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """
+        Determina TIPO_ITEM consultando directamente las tablas HIS.
+
+        Fuente de verdad:
+
+            MAEATE2 -> P
+            MAEATE3 -> S
+
+        La resolución se hace sobre los detalles que realmente serán
+        enviados al Excel, después de toda la limpieza y transformación
+        de los datos.
+
+        No se utiliza:
+            - causa de glosa
+            - tipo_item proveniente del PDF
+            - código específico como MAY869500
+            - reglas heurísticas
+
+        Si no se encuentra el código en HIS, se deja vacío para no
+        inventar un tipo.
+        """
+
+        if not detalles:
+            return detalles
+
+        repository = HISRepository()
+
+        # Agrupamos por factura porque la pertenencia a MAEATE2/MAEATE3
+        # debe comprobarse dentro del contexto de esa factura.
+        grupos: dict[tuple[str, str], list[dict[str, Any]]] = {}
+
+        for detalle in detalles:
+            numero_factura = str(
+                detalle.get("NUMERO_FACTURA") or ""
+            ).strip()
+
+            tipo_factura = str(
+                detalle.get("TIPO_FACTURA") or ""
+            ).strip()
+
+            clave = (
+                numero_factura,
+                tipo_factura,
+            )
+
+            grupos.setdefault(clave, []).append(detalle)
+
+        for (numero_factura, tipo_factura), items in grupos.items():
+
+            codigos = [
+                str(item.get("CODIGO_ITEM") or "").strip()
+                for item in items
+                if str(item.get("CODIGO_ITEM") or "").strip()
+            ]
+
+            if not codigos:
+                continue
+
+            tipos = repository.buscar_tipo_items_excel(
+                codigos=codigos,
+                numero_factura=numero_factura,
+                tipo_factura=tipo_factura,
+            )
+
+            for item in items:
+                codigo_item = str(
+                    item.get("CODIGO_ITEM") or ""
+                ).strip()
+
+                if not codigo_item:
+                    item["TIPO_ITEM"] = ""
+                    continue
+
+                item["TIPO_ITEM"] = tipos.get(
+                    codigo_item,
+                    "",
+                )
+
+        return detalles

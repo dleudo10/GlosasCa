@@ -34,25 +34,6 @@ class HISRepository:
             placeholders = ", ".join(
                 ["%s"] * len(cups_unicos)
             )
-
-            # cur.execute(
-            #     f"""
-            #     SELECT
-            #         GN_RMS.RMSCUM,
-            #         GN_RMS.RMSMSRESO
-            #     FROM MAEATE3
-            #     INNER JOIN GN_RMS
-            #         ON MAEATE3.MSRESO = GN_RMS.RMSMSRESO
-            #     WHERE MAEATE3.MPNFac = %s
-            #     AND MAEATE3.MATipDoc = %s
-            #     AND GN_RMS.RMSCUM IN ({placeholders})
-            #     """,
-            #     [
-            #         numero_factura,
-            #         str(tipo_factura),
-            #         *cups_unicos,
-            #     ],
-            # )
             
             cur.execute(
                 f"""
@@ -284,5 +265,187 @@ class HISRepository:
             for row in rows
         ]
     
-    
-      
+    def buscar_tipo_items_excel(
+        self,
+        codigos: list[str],
+        numero_factura: str,
+        tipo_factura: str,
+    ) -> dict[str, str]:
+        """
+        Determina TIPO_ITEM para los códigos que finalmente serán
+        exportados al Excel.
+
+        Fuente de verdad:
+
+            MAEATE2 -> P
+            MAEATE3 -> S
+
+        El resultado tiene la forma:
+
+            {
+                "CODIGO_1": "P",
+                "CODIGO_2": "S",
+            }
+
+        Los códigos que no puedan determinarse no se incluyen.
+        """
+
+        if not codigos:
+            return {}
+
+        codigos_unicos = sorted({
+            str(c).strip()
+            for c in codigos
+            if c and str(c).strip()
+        })
+
+        if not codigos_unicos:
+            return {}
+
+        resultado: dict[str, str] = {}
+
+        with connections[self.ALIAS].cursor() as cur:
+
+            placeholders = ", ".join(
+                ["%s"] * len(codigos_unicos)
+            )
+
+            # ============================================================
+            # MAEATE2
+            # Procedimientos
+            # ============================================================
+
+            cur.execute(
+                f"""
+                SELECT DISTINCT
+                    CONVERT(varchar(50), MAEATE2.PRCODI)
+                FROM MAEATE2
+                WHERE CONVERT(varchar(50), MAEATE2.MATipDoc) = %s
+                AND CONVERT(varchar(50), MAEATE2.MPNFac) = %s
+                AND CONVERT(varchar(50), MAEATE2.PRCODI)
+                        IN ({placeholders})
+                AND (
+                        MAEATE2.MaEsAnuP <> 'S'
+                        OR MAEATE2.MaEsAnuP IS NULL
+                    )
+                AND MAEATE2.FcPTpoTrn = 'F'
+                """,
+                [
+                    str(tipo_factura),
+                    str(numero_factura),
+                    *codigos_unicos,
+                ],
+            )
+
+            filas_maeate2 = cur.fetchall()
+
+            for row in filas_maeate2:
+                if not row or not row[0]:
+                    continue
+
+                codigo = str(row[0]).strip()
+
+                if codigo:
+                    resultado[codigo] = "P"
+
+            # ============================================================
+            # MAEATE3
+            # Suministros
+            #
+            # Aquí tenemos dos posibilidades:
+            #
+            # 1. CODIGO_ITEM ya es MSRESO
+            # 2. CODIGO_ITEM todavía corresponde al CUPS y debemos
+            #    pasar por GN_RMS.
+            # ============================================================
+
+            cur.execute(
+                f"""
+                SELECT DISTINCT
+                    CONVERT(varchar(50), MAEATE3.MSRESO)
+                FROM MAEATE3
+                WHERE CONVERT(varchar(50), MAEATE3.MATipDoc) = %s
+                AND CONVERT(varchar(50), MAEATE3.MPNFac) = %s
+                AND CONVERT(varchar(50), MAEATE3.MSRESO)
+                        IN ({placeholders})
+                AND (
+                        MAEATE3.MaEsAnuS <> 'S'
+                        OR MAEATE3.MaEsAnuS IS NULL
+                    )
+                AND MAEATE3.FcSTpoTrn = 'F'
+                """,
+                [
+                    str(tipo_factura),
+                    str(numero_factura),
+                    *codigos_unicos,
+                ],
+            )
+
+            filas_maeate3 = cur.fetchall()
+
+            for row in filas_maeate3:
+                if not row or not row[0]:
+                    continue
+
+                codigo = str(row[0]).strip()
+
+                if codigo:
+                    resultado[codigo] = "S"
+
+            # ============================================================
+            # MAEATE3 por CUPS
+            #
+            # Si CODIGO_ITEM todavía es un CUPS, lo relacionamos mediante
+            # GN_RMS.
+            # ============================================================
+
+            faltantes = [
+                codigo
+                for codigo in codigos_unicos
+                if codigo not in resultado
+            ]
+
+            if faltantes:
+                placeholders_faltantes = ", ".join(
+                    ["%s"] * len(faltantes)
+                )
+
+                cur.execute(
+                    f"""
+                    SELECT DISTINCT
+                        CONVERT(varchar(50), GN_RMS.RMSCUM),
+                        CONVERT(varchar(50), MAEATE3.MSRESO)
+                    FROM MAEATE3
+                    INNER JOIN GN_RMS
+                        ON MAEATE3.MSRESO = GN_RMS.RMSMSRESO
+                    WHERE CONVERT(varchar(50), MAEATE3.MATipDoc) = %s
+                    AND CONVERT(varchar(50), MAEATE3.MPNFac) = %s
+                    AND CONVERT(varchar(50), GN_RMS.RMSCUM)
+                            IN ({placeholders_faltantes})
+                    AND (
+                            MAEATE3.MaEsAnuS <> 'S'
+                            OR MAEATE3.MaEsAnuS IS NULL
+                        )
+                    AND MAEATE3.FcSTpoTrn = 'F'
+                    """,
+                    [
+                        str(tipo_factura),
+                        str(numero_factura),
+                        *faltantes,
+                    ],
+                )
+
+                filas_maeate3_cups = cur.fetchall()
+
+                for cups, codigo_item in filas_maeate3_cups:
+
+                    if not cups:
+                        continue
+
+                    cups_key = str(cups).strip()
+
+                    if cups_key:
+                        resultado[cups_key] = "S"
+
+        return resultado 
+        
