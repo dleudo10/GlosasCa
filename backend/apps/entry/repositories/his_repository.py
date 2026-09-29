@@ -11,11 +11,161 @@ class HISRepository:
 
     ALIAS = "clinica"
     
-    def buscar_codigos_item_medicamentos(self,
+    # def buscar_codigos_item_medicamentos(self,
+    #     cups_list: list[str],
+    #     numero_factura: str,
+    #     tipo_factura: str,
+    # ) -> dict[str, str]:
+    #     if not cups_list:
+    #         return {}
+
+    #     cups_unicos = sorted({
+    #         str(c).strip()
+    #         for c in cups_list
+    #         if c and str(c).strip()
+    #     })
+
+    #     if not cups_unicos:
+    #         return {}
+
+    #     resultado: dict[str, str] = {}
+
+    #     with connections[self.ALIAS].cursor() as cur:
+    #         placeholders = ", ".join(
+    #             ["%s"] * len(cups_unicos)
+    #         )
+            
+    #         cur.execute(
+    #             f"""
+    #             SELECT
+    #                 GN_RMS.RMSCUM,
+    #                 GN_RMS.RMSMSRESO
+    #             FROM MAEATE3
+    #             INNER JOIN GN_RMS
+    #                 ON MAEATE3.MSRESO = GN_RMS.RMSMSRESO
+    #             WHERE CONVERT(varchar(50), MAEATE3.MPNFac) = %s
+    #             AND MAEATE3.MATipDoc = %s
+    #             AND CONVERT(varchar(50), GN_RMS.RMSCUM) IN ({placeholders})
+    #             """,
+    #             [numero_factura, str(tipo_factura), *cups_unicos],
+    #         )
+
+    #         filas = cur.fetchall()
+
+    #         for cups, codigo in filas:
+
+    #             # Equivalente a:
+    #             #
+    #             # if row and row[0] and str(row[0]).strip():
+
+    #             if not codigo:
+    #                 continue
+
+    #             cups_key = str(cups).strip()
+    #             codigo_item = str(codigo).strip()
+
+    #             if not codigo_item:
+    #                 continue
+
+    #             resultado[cups_key] = codigo_item
+
+    #         # ============================================================
+    #         # PASO 2 — MISMO FALLBACK DEL MÉTODO ORIGINAL
+    #         #
+    #         # SELECT TOP 1 RMSMSRESO
+    #         # FROM GN_RMS
+    #         # WHERE RMSCUM=?
+    #         # AND RMSMSRESO IS NOT NULL
+    #         # AND RMSMSRESO<>''
+    #         #
+    #         # La única diferencia es que ahora hacemos todos los faltantes
+    #         # mediante IN (...).
+    #         # ============================================================
+
+    #         faltantes = [
+    #             cups
+    #             for cups in cups_unicos
+    #             if cups not in resultado
+    #         ]
+
+    #         if faltantes:
+
+    #             placeholders_fb = ", ".join(
+    #                 ["%s"] * len(faltantes)
+    #             )
+
+    #             # cur.execute(
+    #             #     f"""
+    #             #     SELECT
+    #             #         RMSCUM,
+    #             #         RMSMSRESO
+    #             #     FROM GN_RMS
+    #             #     WHERE RMSCUM IN ({placeholders_fb})
+    #             #     AND RMSMSRESO IS NOT NULL
+    #             #     AND RMSMSRESO <> ''
+    #             #     """,
+    #             #     faltantes,
+    #             # )
+                
+    #             cur.execute(
+    #                 f"""
+    #                 SELECT
+    #                     RMSCUM,
+    #                     RMSMSRESO
+    #                 FROM GN_RMS
+    #                 WHERE CONVERT(varchar(50), RMSCUM) IN ({placeholders_fb})
+    #                 AND RMSMSRESO IS NOT NULL
+    #                 AND RMSMSRESO <> ''
+    #                 """,
+    #                 faltantes,
+    #             )
+
+    #             filas_fallback = cur.fetchall()
+
+    #             for cups, codigo in filas_fallback:
+
+    #                 if not codigo:
+    #                     continue
+
+    #                 cups_key = str(cups).strip()
+    #                 codigo_item = str(codigo).strip()
+
+    #                 if not codigo_item:
+    #                     continue
+
+    #                 # Equivalente a que el método original encontró
+    #                 # el primer resultado válido para ese CUPS.
+    #                 if cups_key not in resultado:
+    #                     resultado[cups_key] = codigo_item
+
+    #         # ============================================================
+    #         # PASO 3 — MISMO COMPORTAMIENTO FINAL DEL MÉTODO ORIGINAL
+    #         #
+    #         # Si no encontró nada:
+    #         #
+    #         #     _cache[key] = cups
+    #         #     return cups
+    #         #
+    #         # Ahora:
+    #         #
+    #         #     resultado[cups] = cups
+    #         # ============================================================
+
+    #         for cups in cups_unicos:
+
+    #             if cups not in resultado:
+
+    #                 resultado[cups] = cups
+
+    #     return resultado
+
+    def buscar_codigos_item_medicamentos(
+        self,
         cups_list: list[str],
         numero_factura: str,
         tipo_factura: str,
     ) -> dict[str, str]:
+
         if not cups_list:
             return {}
 
@@ -31,134 +181,72 @@ class HISRepository:
         resultado: dict[str, str] = {}
 
         with connections[self.ALIAS].cursor() as cur:
+
             placeholders = ", ".join(
                 ["%s"] * len(cups_unicos)
             )
-            
+
+            # ============================================================
+            # BUSCAR SUMINISTROS / MEDICAMENTOS
+            #
+            # Relación:
+            #
+            #       GN_RMS.RMSCUM
+            #              ↓
+            #       GN_RMS.RMSMSRESO
+            #              ↓
+            #       MAEATE3.MSRESO
+            #
+            # Si existe la relación, el código que debe ir al Excel
+            # es MAEATE3.MSRESO.
+            #
+            # Además, se valida que el suministro pertenezca a la
+            # factura que estamos procesando.
+            # ============================================================
+
             cur.execute(
                 f"""
-                SELECT
-                    GN_RMS.RMSCUM,
-                    GN_RMS.RMSMSRESO
+                SELECT DISTINCT
+                    CONVERT(varchar(50), GN_RMS.RMSCUM),
+                    CONVERT(varchar(50), MAEATE3.MSRESO)
                 FROM MAEATE3
                 INNER JOIN GN_RMS
                     ON MAEATE3.MSRESO = GN_RMS.RMSMSRESO
                 WHERE CONVERT(varchar(50), MAEATE3.MPNFac) = %s
-                AND MAEATE3.MATipDoc = %s
-                AND CONVERT(varchar(50), GN_RMS.RMSCUM) IN ({placeholders})
+                AND CONVERT(varchar(50), MAEATE3.MATipDoc) = %s
+                AND CONVERT(varchar(50), GN_RMS.RMSCUM)
+                        IN ({placeholders})
+                AND (
+                        MAEATE3.MaEsAnuS <> 'S'
+                        OR MAEATE3.MaEsAnuS IS NULL
+                    )
+                AND MAEATE3.FcSTpoTrn = 'F'
                 """,
-                [numero_factura, str(tipo_factura), *cups_unicos],
+                [
+                    str(numero_factura),
+                    str(tipo_factura),
+                    *cups_unicos,
+                ],
             )
 
             filas = cur.fetchall()
 
             for cups, codigo in filas:
 
-                # Equivalente a:
-                #
-                # if row and row[0] and str(row[0]).strip():
-
-                if not codigo:
+                if not cups or not codigo:
                     continue
 
                 cups_key = str(cups).strip()
                 codigo_item = str(codigo).strip()
 
-                if not codigo_item:
+                if not cups_key or not codigo_item:
                     continue
 
+                # El código que devolvemos es MSRESO.
                 resultado[cups_key] = codigo_item
 
-            # ============================================================
-            # PASO 2 — MISMO FALLBACK DEL MÉTODO ORIGINAL
-            #
-            # SELECT TOP 1 RMSMSRESO
-            # FROM GN_RMS
-            # WHERE RMSCUM=?
-            # AND RMSMSRESO IS NOT NULL
-            # AND RMSMSRESO<>''
-            #
-            # La única diferencia es que ahora hacemos todos los faltantes
-            # mediante IN (...).
-            # ============================================================
-
-            faltantes = [
-                cups
-                for cups in cups_unicos
-                if cups not in resultado
-            ]
-
-            if faltantes:
-
-                placeholders_fb = ", ".join(
-                    ["%s"] * len(faltantes)
-                )
-
-                # cur.execute(
-                #     f"""
-                #     SELECT
-                #         RMSCUM,
-                #         RMSMSRESO
-                #     FROM GN_RMS
-                #     WHERE RMSCUM IN ({placeholders_fb})
-                #     AND RMSMSRESO IS NOT NULL
-                #     AND RMSMSRESO <> ''
-                #     """,
-                #     faltantes,
-                # )
-                
-                cur.execute(
-                    f"""
-                    SELECT
-                        RMSCUM,
-                        RMSMSRESO
-                    FROM GN_RMS
-                    WHERE CONVERT(varchar(50), RMSCUM) IN ({placeholders_fb})
-                    AND RMSMSRESO IS NOT NULL
-                    AND RMSMSRESO <> ''
-                    """,
-                    faltantes,
-                )
-
-                filas_fallback = cur.fetchall()
-
-                for cups, codigo in filas_fallback:
-
-                    if not codigo:
-                        continue
-
-                    cups_key = str(cups).strip()
-                    codigo_item = str(codigo).strip()
-
-                    if not codigo_item:
-                        continue
-
-                    # Equivalente a que el método original encontró
-                    # el primer resultado válido para ese CUPS.
-                    if cups_key not in resultado:
-                        resultado[cups_key] = codigo_item
-
-            # ============================================================
-            # PASO 3 — MISMO COMPORTAMIENTO FINAL DEL MÉTODO ORIGINAL
-            #
-            # Si no encontró nada:
-            #
-            #     _cache[key] = cups
-            #     return cups
-            #
-            # Ahora:
-            #
-            #     resultado[cups] = cups
-            # ============================================================
-
-            for cups in cups_unicos:
-
-                if cups not in resultado:
-
-                    resultado[cups] = cups
-
         return resultado
-
+    
     def obtener_items_factura(
         self,
         numero_factura: str,
