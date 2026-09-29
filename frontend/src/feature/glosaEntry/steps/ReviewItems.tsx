@@ -384,6 +384,7 @@ const ReviewItems = () => {
                 const seleccionesHIS: SeleccionHISExport[] = seleccionados.map((item) => ({ 
                     uid: item._uid, 
                     codigo: item.codigo_item ?? null, 
+                    codigo_honorario: item.codigo_honorario ?? null,
                     descripcion: item.descripcion ?? null, 
                     valor: valorItemHIS(item), 
                     valor_original: Number(item.valor) || 0, 

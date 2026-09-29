@@ -152,6 +152,7 @@ export interface DevolucionInfo {
 export interface SeleccionHISExport { 
     uid: string; 
     codigo: string | null; 
+    codigo_honorario?: string | null
     descripcion: string | null; 
     valor: number; 
     valor_original: number; 

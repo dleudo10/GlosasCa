@@ -454,53 +454,9 @@ class ExcelExportService:
     # ============================================================
     # REGLAS DEL EXPORTADOR ACTUAL
     # ============================================================
-
     @staticmethod
-    def _es_item_global(
-        item: dict[str, Any],
-    ) -> bool:
-        """
-        Determina si un item del PDF es global.
-
-        MISMA REGLA QUE EL FASTAPI ACTUAL:
-
-        - es_global=True
-        - causa 01
-        - causa 58
-        - CUPS/CUM vacío
-        """
-
-        if item.get("es_global"):
-            return True
-
-        causa = item.get(
-            "causa_especifica",
-            ""
-        ) or ""
-
-        match = re.search(
-            r"(\d+)",
-            str(causa),
-        )
-
-        numero_causa = (
-            match.group(1).zfill(2)[:2]
-            if match
-            else ""
-        )
-
-        if numero_causa in ("01", "58"):
-            return True
-
-        cups = str(
-            item.get("codigo_cups_pdf")
-            or ""
-        ).strip()
-
-        if not cups:
-            return True
-
-        return False
+    def _es_item_global(item: dict[str, Any]) -> bool:
+        return bool(item.get("es_global"))
 
     @staticmethod
     def _limpiar_codigo_glosa(
