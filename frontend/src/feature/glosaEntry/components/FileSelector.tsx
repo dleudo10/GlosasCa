@@ -45,9 +45,9 @@ function FileSelector() {
                     ) === index
             );
 
-            if (uniqueFiles.length > 4) {
+            if (uniqueFiles.length > 10) {
                 setError(
-                    `Solo puedes seleccionar máximo 4 archivos y estás cargando ${uniqueFiles.length} archivos.`
+                    `Solo puedes seleccionar máximo 10 archivos y estás cargando ${uniqueFiles.length} archivos.`
                 );
 
                 return prevFiles;

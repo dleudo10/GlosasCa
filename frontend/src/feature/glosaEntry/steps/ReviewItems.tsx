@@ -445,7 +445,7 @@ const ReviewItems = () => {
     return (
         <div className="w-full">
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[250px_minmax(0,1fr)]">
-                <aside className="min-w-0">
+                <aside className="min-w-0 lg:h-[750px] lg:overflow-auto">
                     <div className="mb-3 rounded-2xl bg-white px-4 py-3 shadow-sm">
                         <h2 className="text-sm font-semibold text-brand-800">Glosas cargadas</h2>
                         <p className="mt-1 text-xs text-gray-400">
