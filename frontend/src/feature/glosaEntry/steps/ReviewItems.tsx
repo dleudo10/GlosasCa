@@ -15,7 +15,8 @@ import {
 } from "../helper/glosaCalculations";
 import { useItemsFactura } from "../hooks/useItemsFactura";
 import { usePuntosRuta } from "../hooks/usePuntosRuta";
-
+import { useValidarExportacion } from "../hooks/useValidarExportacion";
+import ModalResolverItem from "../../../components/ModalResolverItem";
 import type {
     ItemGlosaConUid,
     ItemHISConUid,
@@ -27,6 +28,8 @@ import type {
     GlobalExport,
     SeleccionHISExport,
     ItemHIS,
+    ResolucionItem,
+    ItemPendienteResolucion,
 } from "../entry.types";
 import { exportarGlosas } from "../services/glosasEntry.api";
 
@@ -34,6 +37,23 @@ const ReviewItems = () => {
     // MENSAJE DE ERROR
     const { glosas, nextStep } = useStep();
     const [exportando, setExportando] = useState(false);
+
+    const [pendientesResolucion, setPendientesResolucion] =
+        useState<ItemPendienteResolucion[]>([]);
+
+    const [resolucionesItems, setResolucionesItems] =
+        useState<Record<string, ResolucionItem>>({});
+
+    const [pendienteActivo, setPendienteActivo] =
+        useState<ItemPendienteResolucion | null>(null);
+
+    const [modalResolverOpen, setModalResolverOpen] =
+        useState(false);
+
+        const {
+            mutateAsync: validarExportacion,
+            isPending: validandoExportacion,
+        } = useValidarExportacion();
 
     const [selectedGlosa, setSelectedGlosaState] = useState<string | null>(
         glosas[0]?.name ?? null
@@ -422,25 +442,74 @@ const ReviewItems = () => {
             }; 
         }); 
         
-        return { facturas, }; 
+        return {
+            facturas,
+            resoluciones_items: resolucionesItems,
+        };
     };
 
-    const handleExportar = async () => { 
-        if (!puedeExportar) { 
-            return; 
-        } 
+    // const handleExportar = async () => { 
+    //     if (!puedeExportar) { 
+    //         return; 
+    //     } 
         
-        try { 
-            setExportando(true); 
-            const payload = 
-                construirPayloadExportacion(); 
+    //     try { 
+    //         setExportando(true); 
+    //         const payload = 
+    //             construirPayloadExportacion(); 
                 
-            await exportarGlosas(payload); 
+    //         await exportarGlosas(payload); 
             
-        } catch (error) { 
-            console.error( "Error exportando glosas:", error ); 
-        } finally { setExportando(false); } };
+    //     } catch (error) { 
+    //         console.error( "Error exportando glosas:", error ); 
+    //     } finally { setExportando(false); } 
+    // };
 
+    const handleExportar = async () => {
+
+        if (!puedeExportar) {
+            return;
+        }
+
+        try {
+
+            setExportando(true);
+
+            const payload = construirPayloadExportacion();
+
+            const validacion = await validarExportacion(
+                payload
+            );
+
+            if (validacion.requiere_resolucion) {
+
+                setPendientesResolucion(
+                    validacion.pendientes
+                );
+
+                setPendienteActivo(
+                    validacion.pendientes[0] ?? null
+                );
+
+                setModalResolverOpen(true);
+
+                return;
+            }
+
+            await exportarGlosas(payload);
+
+        } catch (error) {
+
+            console.error(
+                "Error validando/exportando glosas:",
+                error
+            );
+
+        } finally {
+
+            setExportando(false);
+        }
+    };
 
     return (
         <div className="w-full">
@@ -558,7 +627,60 @@ const ReviewItems = () => {
                 onConfirmar={() => setModalOpen(false)}
                 onCerrar={() => setModalOpen(false)}
             />
+
+            <ModalResolverItem
+                open={modalResolverOpen}
+                pendiente={pendienteActivo}
+                onSeleccionar={(pendiente, item) => {
+
+                    setResolucionesItems((prev) => ({
+                        ...prev,
+
+                        [pendiente.uid]: {
+                            codigo_item: item.codigo_item,
+                            tipo_item:
+                                item.tipo_item === "P"
+                                    ? "P"
+                                    : "S",
+                        },
+                    }));
+
+                    const indice =
+                        pendientesResolucion.findIndex(
+                            (p) => p.uid === pendiente.uid
+                        );
+
+                    const siguiente =
+                        pendientesResolucion[indice + 1];
+
+                    if (siguiente) {
+
+                        setPendienteActivo(
+                            siguiente
+                        );
+
+                    } else {
+
+                        setPendienteActivo(null);
+
+                        setModalResolverOpen(false);
+
+                        /*
+                        * En este punto ya se resolvieron
+                        * todos los pendientes.
+                        *
+                        * Dejamos que el usuario vuelva a
+                        * pulsar Exportar.
+                        */
+                    }
+                }}
+                onCerrar={() => {
+                    setModalResolverOpen(false);
+                    setPendienteActivo(null);
+                }}
+            />
         </div>
+
     );
 };
 

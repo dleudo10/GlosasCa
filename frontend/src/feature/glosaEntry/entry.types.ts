@@ -190,5 +190,28 @@ export interface FacturaExport {
 } 
 
 export interface ExportGlosasPayload { 
-    facturas: FacturaExport[]; 
+    facturas: FacturaExport[];
+    resoluciones_items?: Record<string, ResolucionItem>;
+}
+
+export interface ItemPendienteResolucion {
+    uid: string;
+    numero_factura: string;
+    tipo_factura: string;
+    codigo_pdf: string;
+    codigo_glosa: string;
+    descripcion_pdf: string;
+    valor_pdf: number;
+    valor_factura: number;
+}
+
+export interface ResolucionItem {
+    codigo_item: string;
+    tipo_item: "P" | "S";
+}
+
+export interface ResponseValidarExportacion {
+    success: boolean;
+    requiere_resolucion: boolean;
+    pendientes: ItemPendienteResolucion[];
 }

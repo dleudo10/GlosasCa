@@ -14,6 +14,7 @@ from xlutils.copy import copy as xl_copy
 
 
 class ExcelExportService:
+    
 
     # Ruta a la plantilla oficial de la herramienta (la que ella misma
     # exporta para "llenar los datos ahí"). Debe vivir dentro del proyecto,
@@ -68,22 +69,92 @@ class ExcelExportService:
         "OBSERVACION_RESPONSABLE",
     ]
 
-    def generar_excel(self, facturas: list[dict[str, Any]]) -> bytes:
-        """
-        Genera un único Excel con todas las facturas recibidas.
+    # def generar_excel(self, facturas: list[dict[str, Any]]) -> bytes:
+    #     """
+    #     Genera un único Excel con todas las facturas recibidas.
 
-        Cada factura aporta:
-        - Una fila en FACTURAS_CG.
-        - Sus items detallados y HIS en DETALLES_CG.
-        """
+    #     Cada factura aporta:
+    #     - Una fila en FACTURAS_CG.
+    #     - Sus items detallados y HIS en DETALLES_CG.
+    #     """
+
+    #     if not facturas:
+    #         raise ValueError("No se recibieron facturas para exportar.")
+
+    #     facturas_xls = []
+    #     detalles_xls = []
+
+    #     for factura in facturas:
+    #         facturas_xls.append(
+    #             self._crear_factura(factura)
+    #         )
+
+    #         detalles_xls.extend(
+    #             self._crear_detalles(factura)
+    #         )
+            
+    #     detalles_xls = self._resolver_tipo_item_his(detalles_xls)
+
+    #     facturas_xls = self._normalizar_facturas(facturas_xls)
+    #     detalles_xls = self._normalizar_detalles(detalles_xls)
+
+    #     return self._generar_excel(
+    #         facturas=facturas_xls,
+    #         detalles=detalles_xls,
+    #     )
+
+    def generar_excel(
+        self,
+        facturas: list[dict[str, Any]],
+        resoluciones_items: dict[str, dict[str, Any]] | None = None,
+    ) -> bytes:
+
+        facturas_xls, detalles_xls = self._preparar_datos(
+            facturas=facturas,
+            resoluciones_items=resoluciones_items or {},
+        )
+
+        pendientes = self._obtener_items_pendientes(
+            detalles_xls
+        )
+
+        if pendientes:
+            raise ItemsPendientesResolucionError(
+                pendientes
+            )
+
+        facturas_xls = self._normalizar_facturas(
+            facturas_xls
+        )
+
+        detalles_xls = self._normalizar_detalles(
+            detalles_xls
+        )
+
+        return self._generar_excel(
+            facturas=facturas_xls,
+            detalles=detalles_xls,
+        )
+
+    def _preparar_datos(
+        self,
+        facturas: list[dict[str, Any]],
+        resoluciones_items: dict[str, dict[str, Any]],
+    ) -> tuple[
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+    ]:
 
         if not facturas:
-            raise ValueError("No se recibieron facturas para exportar.")
+            raise ValueError(
+                "No se recibieron facturas para exportar."
+            )
 
         facturas_xls = []
         detalles_xls = []
 
         for factura in facturas:
+
             facturas_xls.append(
                 self._crear_factura(factura)
             )
@@ -91,17 +162,104 @@ class ExcelExportService:
             detalles_xls.extend(
                 self._crear_detalles(factura)
             )
-            
-        detalles_xls = self._resolver_tipo_item_his(detalles_xls)
 
-        facturas_xls = self._normalizar_facturas(facturas_xls)
-        detalles_xls = self._normalizar_detalles(detalles_xls)
-
-        return self._generar_excel(
-            facturas=facturas_xls,
-            detalles=detalles_xls,
+        # Primero intenta resolver automáticamente desde HIS
+        detalles_xls = self._resolver_tipo_item_his(
+            detalles_xls
         )
 
+        # Luego aplica las decisiones realizadas por la analista
+        detalles_xls = self._aplicar_resoluciones_manuales(
+            detalles=detalles_xls,
+            resoluciones_items=resoluciones_items,
+        )
+
+        return facturas_xls, detalles_xls
+    
+    @staticmethod
+    def _crear_uid_resolucion(
+        numero_factura: Any,
+        tipo_factura: Any,
+        item: dict[str, Any],
+    ) -> str:
+
+        codigo = str(
+            item.get("codigo_item")
+            or ""
+        ).strip()
+
+        codigo_glosa = str(
+            item.get("codigo_glosa")
+            or ""
+        ).strip()
+
+        pagina = str(
+            item.get("_page")
+            or ""
+        ).strip()
+
+        fila = str(
+            item.get("_row")
+            or ""
+        ).strip()
+
+        return "|".join([
+            str(numero_factura).strip(),
+            str(tipo_factura).strip(),
+            codigo,
+            codigo_glosa,
+            pagina,
+            fila,
+        ])
+    
+    def _obtener_items_pendientes(
+        self,
+        detalles: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+
+        pendientes = []
+
+        for detalle in detalles:
+
+            tipo_item = str(
+                detalle.get("TIPO_ITEM") or ""
+            ).strip()
+
+            if tipo_item:
+                continue
+
+            pendientes.append({
+                "uid": detalle.get(
+                    "_resolucion_uid",
+                    "",
+                ),
+                "numero_factura": str(
+                    detalle.get("NUMERO_FACTURA") or ""
+                ),
+                "tipo_factura": str(
+                    detalle.get("TIPO_FACTURA") or ""
+                ),
+                "codigo_pdf": str(
+                    detalle.get("CODIGO_ITEM") or ""
+                ),
+                "codigo_glosa": str(
+                    detalle.get("CODIGO_GLOSA") or ""
+                ),
+                "descripcion_pdf": str(
+                    detalle.get(
+                        "OBSERVACION_RECEPCION_GLOSA"
+                    ) or ""
+                ),
+                "valor_pdf": self._numero_entero(
+                    detalle.get(
+                        "VALOR_GLOSA_ITEM",
+                        0,
+                    )
+                ),
+            })
+
+        return pendientes
+    
     # ============================================================
     # FACTURAS_CG
     # ============================================================
@@ -310,6 +468,11 @@ class ExcelExportService:
     ) -> dict[str, Any]:
 
         return {
+            "_resolucion_uid": self._crear_uid_resolucion(
+                numero_factura=numero_factura,
+                tipo_factura=tipo_factura,
+                item=item,
+            ),
             "NUMERO_FACTURA": self._numero_entero(numero_factura),
             "TIPO_FACTURA": self._numero_entero(tipo_factura),
             "CODIGO_GLOSA": item.get("codigo_glosa", ""),
@@ -451,6 +614,50 @@ class ExcelExportService:
             "OBSERVACION_RESPONSABLE": "",
         }
 
+    
+    def _aplicar_resoluciones_manuales(
+        self,
+        detalles: list[dict[str, Any]],
+        resoluciones_items: dict[str, dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+
+        if not resoluciones_items:
+            return detalles
+
+        for detalle in detalles:
+
+            uid = detalle.get(
+                "_resolucion_uid"
+            )
+
+            if not uid:
+                continue
+
+            resolucion = resoluciones_items.get(uid)
+
+            if not resolucion:
+                continue
+
+            codigo_item = str(
+                resolucion.get("codigo_item")
+                or ""
+            ).strip()
+
+            tipo_item = str(
+                resolucion.get("tipo_item")
+                or ""
+            ).strip().upper()
+
+            if not codigo_item:
+                continue
+
+            if tipo_item not in {"P", "S"}:
+                continue
+
+            detalle["CODIGO_ITEM"] = codigo_item
+            detalle["TIPO_ITEM"] = tipo_item
+
+        return detalles
     # ============================================================
     # REGLAS DEL EXPORTADOR ACTUAL
     # ============================================================
@@ -552,6 +759,20 @@ class ExcelExportService:
             else ""
         )
 
+    def validar_exportacion(
+        self,
+        facturas: list[dict[str, Any]],
+        resoluciones_items: dict[str, dict[str, Any]] | None = None,
+    ) -> list[dict[str, Any]]:
+
+        _, detalles = self._preparar_datos(
+            facturas=facturas,
+            resoluciones_items=resoluciones_items or {},
+        )
+
+        return self._obtener_items_pendientes(
+            detalles
+        )
     # ============================================================
     # NORMALIZACIÓN
     # ============================================================
@@ -757,43 +978,6 @@ class ExcelExportService:
         buffer.seek(0)
 
         return buffer.getvalue()
-
-    # ============================================================
-    # ESCRITURA DE HOJA (tipos de dato)
-    # ============================================================
-
-    # def _escribir_hoja(
-    #     self,
-    #     hoja,
-    #     columnas: list[str],
-    #     filas: list[dict[str, Any]],
-    # ) -> None:
-    #     """
-    #     Escribe solo las FILAS de datos: el encabezado, los estilos,
-    #     el freeze de la primera fila y el ancho de columnas ya vienen
-    #     dados por la plantilla, así que no se tocan aquí.
-
-    #     - Columnas en CAMPOS_NUMERICOS -> celda numérica real (int).
-    #     - El resto -> celda de texto, incluso si "parece" un número
-    #       (para no perder ceros a la izquierda en códigos).
-    #     """
-
-    #     for fila_idx, fila in enumerate(filas, start=1):
-    #         for columna_idx, nombre_columna in enumerate(columnas):
-    #             valor = fila.get(nombre_columna, "")
-
-    #             if nombre_columna in self.CAMPOS_NUMERICOS:
-    #                 hoja.write(
-    #                     fila_idx,
-    #                     columna_idx,
-    #                     self._numero_entero(valor),
-    #                 )
-    #             else:
-    #                 hoja.write(
-    #                     fila_idx,
-    #                     columna_idx,
-    #                     "" if valor is None else str(valor),
-    #                 )
 
     def _escribir_hoja(
         self,
@@ -1094,3 +1278,11 @@ class ExcelExportService:
                 )
 
         return detalles
+ 
+ 
+class ItemsPendientesResolucionError(ValueError):
+        def __init__(self, pendientes):
+            self.pendientes = pendientes
+            super().__init__(
+                "Existen ítems que requieren resolución manual."
+            )   

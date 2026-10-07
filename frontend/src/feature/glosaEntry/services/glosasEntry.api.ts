@@ -1,5 +1,5 @@
 import api from "../../../api/axios";
-import type { ExportGlosasPayload, PuntoRuta, ResponsePuntosRuta } from "../entry.types";
+import type { ExportGlosasPayload, PuntoRuta, ResponsePuntosRuta, ResponseValidarExportacion } from "../entry.types";
 
 export const uploadPDFs = async (files: File[]) => {
     const formData = new FormData()
@@ -10,6 +10,18 @@ export const uploadPDFs = async (files: File[]) => {
 
     const {data} = await api.post("glosas/upload/", formData);
     console.log(data)
+    return data;
+};
+
+export const validarExportacionGlosas = async (
+    payload: ExportGlosasPayload
+): Promise<ResponseValidarExportacion> => {
+
+    const { data } = await api.post<ResponseValidarExportacion>(
+        "glosas/exportar/validar/",
+        payload
+    );
+
     return data;
 };
 
