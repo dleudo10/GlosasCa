@@ -96,7 +96,6 @@ const ReviewItems = () => {
 
     const {
         mutateAsync: validarExportacion,
-        isPending: validandoExportacion,
     } = useValidarExportacion();
 
     const [selectedGlosa, setSelectedGlosaState] = useState<string | null>(
