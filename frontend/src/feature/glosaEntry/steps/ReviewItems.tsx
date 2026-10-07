@@ -2,7 +2,7 @@ import CardInfo from "../components/CardInfo";
 import Table from "../components/Table";
 import ModalHIS from "../components/ModalHIS";
 import { useStep } from "../../../context/StepsContext";
-import { useRef, useState } from "react";
+import { useMemo , useRef, useState } from "react";
 import { formatNumber } from "../helper/formatPrice";
 import {
     sumaDetallada,
@@ -30,6 +30,7 @@ import type {
     ItemHIS,
     ResolucionItem,
     ItemPendienteResolucion,
+    ResolucionDetalle 
 } from "../entry.types";
 import { exportarGlosas } from "../services/glosasEntry.api";
 
@@ -41,19 +42,62 @@ const ReviewItems = () => {
     const [pendientesResolucion, setPendientesResolucion] =
         useState<ItemPendienteResolucion[]>([]);
 
-    const [resolucionesItems, setResolucionesItems] =
-        useState<Record<string, ResolucionItem>>({});
+    // const [resolucionesItems, setResolucionesItems] =
+    //     useState<Record<string, ResolucionItem>>({});
 
-    const [pendienteActivo, setPendienteActivo] =
-        useState<ItemPendienteResolucion | null>(null);
+    // const [pendienteActivo, setPendienteActivo] =
+    //     useState<ItemPendienteResolucion | null>(null);
+    const [resolucionesDetalle, setResolucionesDetalle] =
+        useState<Record<string, ResolucionDetalle>>({});
+    
+    const [pendienteActivoUid, setPendienteActivoUid] = useState<string | null>(null);
 
     const [modalResolverOpen, setModalResolverOpen] =
         useState(false);
 
-        const {
-            mutateAsync: validarExportacion,
-            isPending: validandoExportacion,
-        } = useValidarExportacion();
+    const resolucionesItems = useMemo<Record<string, ResolucionItem>>(
+        () =>
+            Object.fromEntries(
+                Object.entries(resolucionesDetalle).map(([uid, d]) => [
+                    uid,
+                    {
+                        codigo_item: d.item.codigo_item,
+                        tipo_item: d.item.tipo_item === "P" ? "P" : "S",
+                        valor_editado: d.valor_editado,
+                    },
+                ])
+            ),
+        [resolucionesDetalle]
+    );
+
+    const seleccionarResolucion = (
+        pendiente: ItemPendienteResolucion,
+        item: ItemHIS | null
+    ) => {
+        setResolucionesDetalle((prev) => {
+            if (!item) {
+                const { [pendiente.uid]: _omit, ...resto } = prev;
+                return resto;
+            }
+            return { ...prev, [pendiente.uid]: { item } }; // un solo ítem por pendiente
+        });
+    };
+
+    const actualizarValorResolucion = (uid: string, valor: number | undefined) =>
+        setResolucionesDetalle((prev) =>
+            prev[uid] ? { ...prev, [uid]: { ...prev[uid], valor_editado: valor } } : prev
+        );
+
+    const limpiarResolucion = (uid: string) =>
+        setResolucionesDetalle((prev) => {
+            const { [uid]: _omit, ...resto } = prev;
+            return resto;
+        });
+
+    const {
+        mutateAsync: validarExportacion,
+        isPending: validandoExportacion,
+    } = useValidarExportacion();
 
     const [selectedGlosa, setSelectedGlosaState] = useState<string | null>(
         glosas[0]?.name ?? null
@@ -113,8 +157,17 @@ const ReviewItems = () => {
         nombre: glosa.name, 
         ...obtenerEstadoGlosa(glosa.name), 
     })); 
+
+    const pendientesSinResolver = pendientesResolucion.filter(
+        (p) => !resolucionesDetalle[p.uid]
+    ).length;
+
+    const hayPendientesSinResolver = pendientesSinResolver > 0;
     
-    const puedeExportar = glosas.length > 0 && estadosGlosas.every((glosa) => glosa.lista);
+    const puedeExportar =
+        glosas.length > 0 &&
+        estadosGlosas.every((glosa) => glosa.lista) &&
+        !hayPendientesSinResolver;
 
     const seleccionesPorGlobal = selectedGlosa
         ? seleccionesPorGlosa[selectedGlosa] ?? {}
@@ -392,6 +445,40 @@ const ReviewItems = () => {
         }));
     };
 
+    const norm = (s?: string | null) => (s ?? "").trim().toUpperCase();
+
+    const pendientesConCobrado = useMemo<ItemPendienteResolucion[]>(
+        () =>
+            pendientesResolucion.map((p) => {
+                const glosa = glosas.find(
+                    (g) => g.encabezado?.numero_factura === p.numero_factura
+                );
+                const items = glosa?.items ?? [];
+
+                // 1) por uid; 2) por código de glosa + valor + código/descripción
+                const candidatos = items.filter(
+                    (i) =>
+                        norm(i.codigo_glosa) === norm(p.codigo_glosa) &&
+                        Number(i.valor_glosa) === Number(p.valor_pdf)
+                );
+                const item =
+                    items.find((i) => globalUid(i) === p.uid) ??
+                    candidatos.find(
+                        (i) =>
+                            norm(i.codigo_cups_pdf || i.codigo_item) === norm(p.codigo_pdf) &&
+                            norm(i.descripcion) === norm(p.descripcion_pdf)
+                    ) ??
+                    candidatos.find((i) => norm(i.descripcion) === norm(p.descripcion_pdf)) ??
+                    candidatos.find(
+                        (i) => norm(i.codigo_cups_pdf || i.codigo_item) === norm(p.codigo_pdf)
+                    ) ??
+                    candidatos[0];
+
+                return { ...p, valor_cobrado: item?.valor_cobrado };
+            }),
+        [pendientesResolucion, glosas]
+    );
+
     const construirPayloadExportacion = (): ExportGlosasPayload => { 
         const facturas: FacturaExport[] = glosas.map((glosa) => { 
             const nombreGlosa = glosa.name; 
@@ -482,17 +569,13 @@ const ReviewItems = () => {
             );
 
             if (validacion.requiere_resolucion) {
-
-                setPendientesResolucion(
-                    validacion.pendientes
+                setPendientesResolucion(validacion.pendientes);
+                setPendienteActivoUid(
+                    validacion.pendientes.find((p) => !resolucionesDetalle[p.uid])?.uid ??
+                    validacion.pendientes[0]?.uid ??
+                    null
                 );
-
-                setPendienteActivo(
-                    validacion.pendientes[0] ?? null
-                );
-
                 setModalResolverOpen(true);
-
                 return;
             }
 
@@ -583,7 +666,19 @@ const ReviewItems = () => {
                         onSeleccionarPuntoRuta={seleccionarPuntoRuta}
                         datosPuntoRuta={devolucionInfo.puntoRuta}
                     />
-                    <div className="flex justify-end">
+                    <div className="flex justify-end gap-2">
+                        {pendientesResolucion.length > 0 && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setPendienteActivoUid((a) => a ?? pendientesResolucion[0]?.uid ?? null);
+                                    setModalResolverOpen(true);
+                                }}
+                                className="rounded-xl border border-brand-800 px-6 py-3 text-sm font-semibold text-brand-800 hover:bg-blue-50"
+                            >
+                                Revisar pendientes ({Object.keys(resolucionesDetalle).length}/{pendientesResolucion.length})
+                            </button>
+                        )}
                         <button
                             type="button"
                             onClick={handleExportar}
@@ -600,9 +695,11 @@ const ReviewItems = () => {
                         >
                             {exportando
                                 ? "Generando XLS..."
-                                : puedeExportar
-                                    ? `Exportar ${glosas.length} facturas`
-                                    : "Completa todas las facturas"}
+                                : hayPendientesSinResolver
+                                    ? `Resuelve los pendientes (${pendientesSinResolver})`
+                                    : puedeExportar
+                                        ? `Exportar ${glosas.length} facturas`
+                                        : "Completa todas las facturas"}
                         </button>
                     </div>
                     <Table
@@ -630,54 +727,15 @@ const ReviewItems = () => {
 
             <ModalResolverItem
                 open={modalResolverOpen}
-                pendiente={pendienteActivo}
-                onSeleccionar={(pendiente, item) => {
-
-                    setResolucionesItems((prev) => ({
-                        ...prev,
-
-                        [pendiente.uid]: {
-                            codigo_item: item.codigo_item,
-                            tipo_item:
-                                item.tipo_item === "P"
-                                    ? "P"
-                                    : "S",
-                        },
-                    }));
-
-                    const indice =
-                        pendientesResolucion.findIndex(
-                            (p) => p.uid === pendiente.uid
-                        );
-
-                    const siguiente =
-                        pendientesResolucion[indice + 1];
-
-                    if (siguiente) {
-
-                        setPendienteActivo(
-                            siguiente
-                        );
-
-                    } else {
-
-                        setPendienteActivo(null);
-
-                        setModalResolverOpen(false);
-
-                        /*
-                        * En este punto ya se resolvieron
-                        * todos los pendientes.
-                        *
-                        * Dejamos que el usuario vuelva a
-                        * pulsar Exportar.
-                        */
-                    }
-                }}
-                onCerrar={() => {
-                    setModalResolverOpen(false);
-                    setPendienteActivo(null);
-                }}
+                pendientes={pendientesConCobrado}
+                pendienteActivoUid={pendienteActivoUid}
+                onCambiarPendiente={setPendienteActivoUid}
+                resoluciones={resolucionesDetalle}
+                onSeleccionar={seleccionarResolucion}
+                onActualizarValor={actualizarValorResolucion}
+                onLimpiarSeleccion={limpiarResolucion}
+                onConfirmar={() => setModalResolverOpen(false)}
+                onCerrar={() => setModalResolverOpen(false)}
             />
         </div>
 

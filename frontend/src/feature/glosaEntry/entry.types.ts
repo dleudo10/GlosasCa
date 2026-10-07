@@ -202,7 +202,7 @@ export interface ItemPendienteResolucion {
     codigo_glosa: string;
     descripcion_pdf: string;
     valor_pdf: number;
-    valor_factura: number;
+    valor_cobrado?: number;
 }
 
 export interface ResolucionItem {
@@ -214,4 +214,16 @@ export interface ResponseValidarExportacion {
     success: boolean;
     requiere_resolucion: boolean;
     pendientes: ItemPendienteResolucion[];
+}
+
+export interface ResolucionItem {
+    codigo_item: string;
+    tipo_item: "P" | "S";
+    valor_editado?: number; // nuevo (opcional; el backend puede ignorarlo)
+}
+
+// nuevo: lo que se guarda en caché para poder reabrir/editar
+export interface ResolucionDetalle {
+    item: ItemHIS;
+    valor_editado?: number;
 }
